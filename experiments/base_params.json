@@ -1,0 +1,11 @@
+{
+    "dataset": "brain-segmentation",
+    "num_validation_patients": 10,
+    "num_unlabeled_patients": 90,
+    "learning_rate": 1e-4,
+    "batch_size": 16,
+    "mu": 1,
+    "num_epochs": 200,
+    "save_summary_steps": 100,
+    "seed": 42
+}
