@@ -64,12 +64,15 @@ def generate_outputs(model, dataloader, params, save=True):
             image_list.extend([image_batch[s].numpy().transpose(1, 2, 0) for s in range(batch_size)])
             mask_list.extend([mask_batch[s].numpy().transpose(1, 2, 0) for s in range(batch_size)])
 
+    output_path = os.path.join(params.model_dir, "outputs")
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
+    
     output_list = []
-    os.makedirs(os.path.join(params.model_dir, "output"), exist_ok=True)
     for i in range(len(image_list)):
         sample = (image_list[i], mask_list[i], pred_list[i])
         output_list.append(sample)
         if save:
-            image_path = os.path.join(params.model_dir, "output/val_{}.png".format(i))
+            image_path = os.path.join(output_path, "val_{}.png".format(i))
             save_image_mask(image_path, *sample)
     return output_list

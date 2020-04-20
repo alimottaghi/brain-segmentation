@@ -27,20 +27,25 @@ class RunningAverage():
         return self.total/float(self.steps)
         
     
-def set_logger(log_path):
-    """Set the logger to log info in terminal and file `log_path`.
+def set_logger(dir_path):
+    """Set the logger to log info in terminal and file `dir_path/logs/logs.log`.
     In general, it is useful to have a logger so that every output to the terminal is saved
-    in a permanent file. Here we save it to `model_dir/train.log`.
+    in a permanent file. Here we save it to `dir_path/logs/logs.log`.
     Example:
     ```
     logging.info("Starting training...")
     ```
     Args:
-        log_path: (string) where to log
+        dir_path: (string) directory to save the log
     """
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-
+    
+    dir_path = os.path.join(dir_path, 'logs')
+    if not os.path.exists(dir_path):
+        os.mkdir(dir_path)
+    log_path = os.path.join(dir_path, "logs.txt")
+    
     if not logger.handlers:
         # Logging to a file
         file_handler = logging.FileHandler(log_path)
