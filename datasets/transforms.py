@@ -3,6 +3,7 @@ import imgaug.augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
 import torch
+from torchvision.transforms import Compose
 
 
 class Augmentation(object):
@@ -46,3 +47,31 @@ class ToImage(object):
                 sample.append(image)
             return tuple(sample)
         
+
+def get_transforms(params, mode='week'):
+    if mode=='week':
+        augs_dict = params.week_augmentations
+    elif mode=='strong':
+        augs_dict = params.strong_augmentations
+    else:
+        raise NotImplemented
+    
+    iaa_list = []
+    for aug in augs_dict:
+        if aug == 'scale':
+            scale = tuple(augs_dict[aug])
+            iaa_list.append(iaa.Affine(scale=scale))
+        if aug == 'rotate':
+            rotate = tuple(augs_dict[aug])
+            iaa_list.append(iaa.Affine(rotate=rotate))
+        if aug == 'flip':
+            flip = augs_dict[aug]
+            iaa_list.append(iaa.Fliplr(flip))
+            
+    iaa_augs = iaa.Sequential(iaa_list)
+    transforms = Compose([Augmentation(iaa_augs), ToTensor()])
+    return transforms
+        
+        
+        
+    
