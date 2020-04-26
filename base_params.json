@@ -15,7 +15,7 @@
     "learning_rate": 1e-4,
     "batch_size": 16,
     "mu": 1,
-    "num_epochs": 100,
+    "num_epochs": 200,
     "save_summary_steps": 100,
     "seed": 42
 }

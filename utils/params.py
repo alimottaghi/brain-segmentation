@@ -1,4 +1,8 @@
 import json
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from tabulate import tabulate
 
 
 class Params():
@@ -54,3 +58,86 @@ def load_dict_to_json(d, json_path):
         d.update(params)
         return d
 
+
+def aggregate_metrics(parent_dir, metrics):
+    """Aggregate the metrics of all experiments in folder `parent_dir`.
+    Assumes that `parent_dir` contains multiple experiments, with their results stored in
+    `parent_dir/subdir/metrics.json`
+    Args:
+        parent_dir: (string) path to directory containing experiments results
+        metrics: (dict) subdir -> {'accuracy': ..., ...}
+    """
+    metrics_file = os.path.join(parent_dir, 'metrics.json')
+    if os.path.isfile(metrics_file):
+        with open(metrics_file, 'r') as f:
+            metrics[parent_dir] = json.load(f)
+
+    for subdir in os.listdir(parent_dir):
+        if not os.path.isdir(os.path.join(parent_dir, subdir)):
+            continue
+        else:
+            aggregate_metrics(os.path.join(parent_dir, subdir), metrics)    
+            
+
+def synthesize_results(parent_dir):
+    """Aggregates results from the metrics.json in a parent folder
+    Args:
+        parent_dir: (string) path to directory containing experiments results
+    """
+    metrics = dict()
+    aggregate_metrics(parent_dir, metrics)
+    metric_names = metrics[list(metrics.keys())[0]].keys()
+
+    experiments = dict()
+    for subdir, values in metrics.items():
+        split_path = subdir.replace(parent_dir, '').split('/')
+        param_name = split_path[1]
+        split_exp = split_path[2].split('_')
+        alg, param_val, run = split_exp[0], split_exp[1], split_exp[2]
+
+        if param_name not in experiments:
+            experiments[param_name] = dict()
+        for metric_name in metric_names:
+            if metric_name not in experiments[param_name]:
+                experiments[param_name][metric_name] = dict()
+            if alg not in experiments[param_name][metric_name]:
+                experiments[param_name][metric_name][alg] = dict()
+            if param_val not in experiments[param_name][metric_name][alg]:
+                experiments[param_name][metric_name][alg][param_val] = dict()
+            if not experiments[param_name][metric_name][alg][param_val]:
+                experiments[param_name][metric_name][alg][param_val] = []
+            experiments[param_name][metric_name][alg][param_val].append(values[metric_name])
+
+    for param_name in experiments:
+        cur_param = experiments[param_name]
+        for metric_name in cur_param:
+            cur_metric = cur_param[metric_name]
+            fig = plt.figure()
+            for alg in cur_metric:
+                cur_lag = cur_metric[alg]
+                param_val_list = []
+                metric_val_list = []
+                metric_std_list = []
+                for param_val in cur_lag:
+                    param_val_list.append(int(param_val))
+                    metric_val_list.append(np.mean(cur_metric[alg][param_val]))
+                    metric_std_list.append(np.std(cur_metric[alg][param_val]))
+                param_val_list, metric_val_list = zip(*sorted(zip(param_val_list, metric_val_list)))
+
+                plt.plot(param_val_list, metric_val_list, label=alg)
+
+            plt.xlabel(param_name.replace('_', ' ').title())
+            plt.ylabel(metric_name.replace('_', ' ').title())
+            plt.legend()
+            plt.show()
+            fig.savefig(os.path.join(parent_dir, param_name, metric_name.replace(' ', '_') + '.png'))
+            
+    metrics = dict()
+    aggregate_metrics(parent_dir, metrics)
+    headers = metrics[list(metrics.keys())[0]].keys()
+    table_list = [[subdir] + [values[h] for h in headers] for subdir, values in metrics.items()]
+    table = tabulate(table_list, headers, tablefmt='pipe')
+    
+    save_file = os.path.join(parent_dir, "results.md")
+    with open(save_file, 'w') as f:
+        f.write(table)

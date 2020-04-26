@@ -1,4 +1,5 @@
 import os
+import json
 import argparse
 import logging
 import numpy as np
@@ -11,7 +12,7 @@ from models.unet import UNet
 from metrics.dice_loss import DiceLoss, dice_score
 from train import train_supervised, train_eval_supervised, train_semi_supervised, train_eval_semi_supervised
 from evaluate import generate_outputs
-from utils.params import Params
+from utils.params import Params, synthesize_results
 from utils.logger import set_logger
 from utils.visualizer import plot_samples
 
@@ -23,7 +24,7 @@ parser.add_argument('--base_file', default='base_params.json', help="Path of bas
 parser.add_argument('--mode', default='supervised', help="Mode of the training (supervised or semi-supervised)")
 parser.add_argument('--run', default='run0', help="Run suffix")
 parser.add_argument('--restore', default=True, help="Restore the previous checkpoint (if exists) or not")
-parser.add_argument('--search_params', default={'num_unlabeled_patients': [80, 90, 95]}, help="Dictionary for hyperparameters to tune")
+parser.add_argument('--search_params', type=json.loads, default='{"num_unlabeled_patients": [80, 90, 95]}', help="Dictionary for hyperparameters to tune (in string format)")
 
 
 def lunch_training_job(model_dir, data_dir, params, mode='supervised'):
@@ -72,7 +73,7 @@ def lunch_training_job(model_dir, data_dir, params, mode='supervised'):
         raise NotImplemented
         
     output_list = generate_outputs(model, val_loader, params, save=True)
-    
+
     
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -119,4 +120,6 @@ if __name__ == "__main__":
         params.save(params_path)
         lunch_training_job(model_dir, data_dir, params, mode=args.mode)
     
+    synthesize_results(exp_dir)
+
     
