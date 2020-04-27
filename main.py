@@ -24,7 +24,7 @@ parser.add_argument('--base_file', default='base_params.json', help="Path of bas
 parser.add_argument('--mode', default='supervised', help="Mode of the training (supervised or semi-supervised)")
 parser.add_argument('--run', default='run0', help="Run suffix")
 parser.add_argument('--restore', default=True, help="Restore the previous checkpoint (if exists) or not")
-parser.add_argument('--search_params', type=json.loads, default='{"num_unlabeled_patients": [80, 90, 95]}', help="Dictionary for hyperparameters to tune (in string format)")
+parser.add_argument('--search_params', type=json.loads, default='{"num_unlabeled_patients": [95, 90, 80]}', help="Dictionary for hyperparameters to tune (in string format)")
 
 
 def lunch_training_job(model_dir, data_dir, params, mode='supervised'):
@@ -56,7 +56,7 @@ def lunch_training_job(model_dir, data_dir, params, mode='supervised'):
     val_dataset = BrainSegmentationDataset(data_dir, subset="validation", transform=totensor, params=params)
     
     labeled_loader = DataLoader(labeled_dataset, batch_size=params.batch_size, shuffle=True, drop_last=True)
-    unlabeled_loader = DataLoader(unlabeled_dataset, batch_size=params.mu*params.batch_size, shuffle=True, drop_last=True)
+    unlabeled_loader = DataLoader(unlabeled_dataset, batch_size=params.batch_ratio*params.batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=params.batch_size, drop_last=False)
     
     model = UNet(in_channels=3, out_channels=1)

@@ -158,7 +158,7 @@ def train_semi_supervised(model, optimizer, loss_fn, labeled_loader, unlabeled_l
             
             unl_loss = torch.zeros(1).to(params.device)
             unl_counter = torch.zeros(1).to(params.device)
-            for b in range(params.mu*params.batch_size):
+            for b in range(params.batch_ratio*params.batch_size):
                 b_pred = unl_pred_batch[b]
                 if (b_pred > 0.5).any() and b_pred[b_pred > 0.5].mean() > 0.99:
                     if (b_pred < 0.5).any() and b_pred[b_pred < 0.5].mean() < 0.01:
@@ -233,9 +233,9 @@ def train_eval_semi_supervised(model, optimizer, loss_fn, labeled_loader, unlabe
         os.mkdir(log_path)
     writer = SummaryWriter(log_path)
     
-    while epoch < params.num_epochs:
+    while epoch < int(params.num_epochs * (1 + params.batch_ratio)):
         epoch += 1
-        logging.info("Epoch {}/{}".format(epoch, params.num_epochs))
+        logging.info("Epoch {}/{}".format(epoch, int(params.num_epochs * (1 + params.batch_ratio))))
         
         train_metrics = train_semi_supervised(model, optimizer, loss_fn, labeled_loader, unlabeled_loader, metrics, params)
         
