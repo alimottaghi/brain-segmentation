@@ -2,6 +2,15 @@ import numpy as np
 from matplotlib import pyplot as plt
 from skimage.io import imsave
 
+import torch
+
+
+def normalize_tensor(image):
+    image += torch.abs(torch.min(image))
+    image_max = torch.abs(torch.max(image))
+    if image_max > 0:
+        image /= image_max
+    return image
 
 def outline(image, mask, color):
     mask = np.round(mask)

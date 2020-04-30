@@ -1,21 +1,25 @@
 {
     "dataset": "brain-segmentation",
     "num_validation_patients": 10,
-    "num_unlabeled_patients": 95,
+    "num_unlabeled_patients": 90,
     "week_augmentations": {
         "scale": [0.95, 1.05],
         "rotate": [-15, 15],
+        "translate": [-0.05, 0.05],
+        "shear": [-10, 10],
         "flip": 0.5
     },
     "strong_augmentations": {
-        "scale": [0.8, 1.2],
-        "rotate": [-30, 30],
+        "scale": [0.9, 1.1],
+        "rotate": [-20, 20],
+        "translate": [-0.1, 0.1],
+        "shear": [-15, 15],
         "flip": 0.5
     },
     "learning_rate": 1e-4,
     "batch_size": 16,
     "batch_ratio": 1,
-    "num_epochs": 100,
+    "num_epochs": 50,
     "save_summary_steps": 100,
     "seed": 42
 }

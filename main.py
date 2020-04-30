@@ -10,7 +10,7 @@ from datasets.brain_dataset import BrainSegmentationDataset
 from datasets.transforms import ToTensor, ToImage, get_transforms
 from models.unet import UNet
 from metrics.dice_loss import DiceLoss, dice_score
-from train import train_supervised, train_eval_supervised, train_semi_supervised, train_eval_semi_supervised
+from train import train_eval
 from evaluate import generate_outputs
 from utils.params import Params, synthesize_results
 from utils.logger import set_logger
@@ -21,19 +21,19 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', default=None, help="Directory containing the dataset")
 parser.add_argument('--exp_dir', default=None, help='Directory to save the results')
 parser.add_argument('--base_file', default='base_params.json', help="Path of base_params.json file")
-parser.add_argument('--mode', default='supervised', help="Mode of the training (supervised or semi-supervised)")
+parser.add_argument('--alg', default='supervised', help="Algorithm for the training (supervised or semi-supervised)")
 parser.add_argument('--run', default='run0', help="Run suffix")
 parser.add_argument('--restore', default=True, help="Restore the previous checkpoint (if exists) or not")
-parser.add_argument('--search_params', type=json.loads, default='{"num_unlabeled_patients": [95, 90, 80]}', help="Dictionary for hyperparameters to tune (in string format)")
+parser.add_argument('--search_params', type=json.loads, default='{"num_unlabeled_patients": [95, 50, 5]}', help="Dictionary for hyperparameters to tune (in string format)")
 
 
-def lunch_training_job(model_dir, data_dir, params, mode='supervised'):
+def lunch_training_job(algorithm, model_dir, data_dir, params):
     """Launch training of the model with a set of hyperparameters
     Args:
+        algorithm: (string) algorithm for training e.g. 'supervised', 'semi-supervised'
         model_dir: (string) directory containing config, weights and log
         data_dir: (string) directory containing the dataset
         params: (dict) containing hyperparameters
-        mode: (string) supervised or semi-supervised training
     """
     
     os.makedirs(model_dir, exist_ok=True)
@@ -57,7 +57,7 @@ def lunch_training_job(model_dir, data_dir, params, mode='supervised'):
     
     labeled_loader = DataLoader(labeled_dataset, batch_size=params.batch_size, shuffle=True, drop_last=True)
     unlabeled_loader = DataLoader(unlabeled_dataset, batch_size=params.batch_ratio*params.batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=params.batch_size, drop_last=False)
+    val_loader = DataLoader(val_dataset, batch_size=params.batch_size, shuffle=True, drop_last=False)
     
     model = UNet(in_channels=3, out_channels=1)
     model.to(params.device)
@@ -65,12 +65,7 @@ def lunch_training_job(model_dir, data_dir, params, mode='supervised'):
     loss_fn = DiceLoss()
     metrics = {'dice score': dice_score}
     
-    if mode=='supervised':
-        train_eval_supervised(model, optimizer, loss_fn, labeled_loader, val_loader, metrics, params)
-    elif mode=='semi-supervised':
-        train_eval_semi_supervised(model, optimizer, loss_fn, labeled_loader, unlabeled_loader, val_loader, metrics, params)
-    else:
-        raise NotImplemented
+    train_eval(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_loader, val_loader, metrics, params)
         
     output_list = generate_outputs(model, val_loader, params, save=True)
 
@@ -103,22 +98,22 @@ if __name__ == "__main__":
         for param_name in args.search_params:
             for val in args.search_params[param_name]:
                 print('--- Hyperparameter ' + param_name + ' : ' + str(val))
-                model_dir = os.path.join(exp_dir, param_name, args.mode + '_' + str(val) + '_' + args.run)
+                model_dir = os.path.join(exp_dir, param_name, args.alg + '_' + str(val) + '_' + args.run)
                 os.makedirs(model_dir, exist_ok=True)
                 params = Params(args.base_file)
                 params.restore = args.restore
                 setattr(params, param_name, val)
                 params_path = os.path.join(model_dir, "params.json")
                 params.save(params_path)
-                lunch_training_job(model_dir, data_dir, params, mode=args.mode)
+                lunch_training_job(args.alg, model_dir, data_dir, params)
     else:
-        model_dir = os.path.join(exp_dir, args.mode + '_' + args.run)
+        model_dir = os.path.join(exp_dir, args.alg + '_' + args.run)
         os.makedirs(model_dir, exist_ok=True)
         params = Params(args.base_file)
         params.restore = args.restore
         params_path = os.path.join(model_dir, "params.json")
         params.save(params_path)
-        lunch_training_job(model_dir, data_dir, params, mode=args.mode)
+        lunch_training_job(args.alg, model_dir, data_dir, params)
     
     synthesize_results(exp_dir)
 

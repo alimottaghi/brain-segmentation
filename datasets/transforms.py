@@ -64,6 +64,18 @@ def get_transforms(params, mode='week'):
         if aug == 'rotate':
             rotate = tuple(augs_dict[aug])
             iaa_list.append(iaa.Affine(rotate=rotate))
+        if aug == 'translate':
+            percent = tuple(augs_dict[aug])
+            iaa_list.append(iaa.TranslateX(percent=percent))
+            iaa_list.append(iaa.TranslateY(percent=percent))
+        if aug == 'shear':
+            shear = tuple(augs_dict[aug])
+            iaa_list.append(iaa.ShearX(shear=shear))
+            iaa_list.append(iaa.ShearX(shear=shear))
+        if aug == 'elastic':
+            # "elastic": [2, 0.25],
+            elastic = tuple(augs_dict[aug])
+            iaa_list.append(iaa.ElasticTransformation(alpha=(0, elastic[0]), sigma=(0, elastic[1])))
         if aug == 'flip':
             flip = augs_dict[aug]
             iaa_list.append(iaa.Fliplr(flip))
