@@ -1,7 +1,7 @@
 {
     "dataset": "brain-segmentation",
     "num_validation_patients": 10,
-    "num_unlabeled_patients": 90,
+    "num_unlabeled_patients": 95,
     "week_augmentations": {
         "scale": [0.95, 1.05],
         "rotate": [-15, 15],
@@ -19,7 +19,7 @@
     "learning_rate": 1e-4,
     "batch_size": 16,
     "batch_ratio": 1,
-    "num_epochs": 50,
+    "num_epochs": 200,
     "save_summary_steps": 100,
     "seed": 42
 }

@@ -66,6 +66,39 @@ def semi_supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_b
     return lab_loss, unl_loss
 
 
+def consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params):
+    """Semi-supervised training algorithm with consistency loss
+    Args:
+        model: (torch.nn.Module) the neural network
+        loss_fn: a function that takes batch_output and batch_labels and computes the loss for the batch
+        lab_image_batch: (torch.tensor) a batch of labeled images
+        lab_mask_batch: (torch.tensor) a batch of masks
+        unl_image_batch: (torch.tensor) a batch of unlabeled images
+        params: (Params) hyperparameters
+    """
+    
+    lab_pred_batch = model(lab_image_batch)
+    unl_pred_batch = model(unl_image_batch)
+            
+    lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
+
+    unl_loss = torch.zeros(1).to(params.device)
+    unl_counter = torch.zeros(1).to(params.device)
+    for b in range(params.batch_ratio*params.batch_size):
+        b_image = unl_image_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
+        b_mask = unl_pred_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
+        b_image, b_mask = params.week_transforms((b_image, b_mask))
+        b_image, b_mask = b_image.to(params.device).unsqueeze(0), b_mask.to(params.device).unsqueeze(0)
+        b_pred = model(b_image)
+        unl_loss += loss_fn(b_pred, b_mask)
+        unl_counter += 1
+
+    if unl_counter.item() > 0:
+        unl_loss = unl_loss / unl_counter
+        unl_loss = unl_loss / 10
+    return lab_loss, unl_loss
+
+
 def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_loader, metrics, params):
     """Train the model for one epoch
     Args:
@@ -110,6 +143,8 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
                 lab_loss, unl_loss = supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params)
             elif algorithm == 'semi-supervised':
                 lab_loss, unl_loss = semi_supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params)
+            elif algorithm == 'consistency':
+                lab_loss, unl_loss = consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params)
             else:
                 raise NotImplemented
             
