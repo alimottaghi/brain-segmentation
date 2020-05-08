@@ -3,8 +3,10 @@ import json
 import argparse
 import logging
 import numpy as np
+
 import torch
 from torch.utils.data import DataLoader
+from torchvision.transforms import Compose
 
 from datasets.brain_dataset import BrainSegmentationDataset
 from datasets.transforms import ToTensor, ToImage, get_transforms
@@ -46,13 +48,14 @@ def lunch_training_job(algorithm, model_dir, data_dir, params):
     strong_transforms = get_transforms(params, mode='strong')
     totensor = ToTensor()
     toimage = ToImage()
+    train_transforms = Compose([week_transforms, totensor])
     params.week_transforms = week_transforms
     params.strong_transforms = strong_transforms
     
     params.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
-    labeled_dataset = BrainSegmentationDataset(data_dir, subset="labeled", transform=week_transforms, params=params)
-    unlabeled_dataset = BrainSegmentationDataset(data_dir, subset="unlabeled", transform=totensor, params=params)
+    labeled_dataset = BrainSegmentationDataset(data_dir, subset="labeled", transform=train_transforms, params=params)
+    unlabeled_dataset = BrainSegmentationDataset(data_dir, subset="unlabeled", transform=train_transforms, params=params)
     val_dataset = BrainSegmentationDataset(data_dir, subset="validation", transform=totensor, params=params)
     
     labeled_loader = DataLoader(labeled_dataset, batch_size=params.batch_size, shuffle=True, drop_last=True)

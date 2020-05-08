@@ -115,6 +115,51 @@ def consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch
     return lab_loss, unl_loss
 
 
+def confidence_map(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params):
+    """Semi-supervised training algorithm
+    Args:
+        model: (torch.nn.Module) the neural network
+        loss_fn: a function that takes batch_output and batch_labels and computes the loss for the batch
+        lab_image_batch: (torch.tensor) a batch of labeled images
+        lab_mask_batch: (torch.tensor) a batch of masks
+        unl_image_batch: (torch.tensor) a batch of unlabeled images
+        params: (Params) hyperparameters
+    """
+    
+    lab_pred_batch = model(lab_image_batch)
+    lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
+    
+    if lab_loss.item() > 0.5:
+        unl_loss = torch.zeros(1).to(params.device)
+    else:
+        unl_pred_batch = model(unl_image_batch)
+        new_image_batch, new_mask_batch = torch.zeros_like(unl_image_batch), torch.zeros_like(unl_pred_batch)
+        conf_map_batch = torch.zeros_like(unl_pred_batch)
+        for b in range(params.batch_ratio*params.batch_size):
+            b_image, b_heatmap = ToImage()((unl_image_batch[b], unl_pred_batch[b]))
+            b_image, b_heatmap = params.strong_transforms((b_image, b_heatmap))
+            b_conf = ((b_heatmap > 0.99) + (b_heatmap < 0.01)).astype(np.float32)
+            b_mask = (b_heatmap > 0.5).astype(np.float32)
+            _, b_conf = ToTensor()((b_image, b_conf))
+            b_image, b_mask = ToTensor()((b_image, b_mask))
+            new_image_batch[b], new_mask_batch[b] = b_image, b_mask
+            conf_map_batch[b] = b_conf
+        new_image_batch, new_mask_batch = new_image_batch.to(params.device), new_mask_batch.to(params.device)
+        new_pred_batch = model(new_image_batch)
+        unl_loss = loss_fn(conf_map_batch * new_pred_batch, conf_map_batch * new_mask_batch)
+
+        if params.step % params.save_summary_steps == 0:
+            new_image_grid = normalize_tensor(torchvision.utils.make_grid(new_image_batch, nrow=4))
+            new_pred_grid = torchvision.utils.make_grid(new_pred_batch, nrow=4)
+            new_mask_grid = torchvision.utils.make_grid(new_mask_batch, nrow=4)
+            new_conf_grid = torchvision.utils.make_grid(conf_map_batch, nrow=4)
+            params.writer.add_image('consistency/image', new_image_grid, params.step)
+            params.writer.add_image('consistency/pred', new_pred_grid, params.step)
+            params.writer.add_image('consistency/mask', new_mask_grid, params.step)
+            params.writer.add_image('consistency/conf', new_conf_grid, params.step)
+    return lab_loss, unl_loss
+
+
 def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_loader, metrics, params):
     """Train the model for one epoch
     Args:
