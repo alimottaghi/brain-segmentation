@@ -30,7 +30,7 @@ For intractive running of code follow the [notebook](notebook.ipynb).
 To train and evaluate a model run:
 
 ```
-CUDA_VISIBLE_DEVICES=0 python main.py --mode semi-supervised \
-    --search_params '{"num_unlabeled_patients": [95, 90, 80]}' \
+CUDA_VISIBLE_DEVICES=0 python main.py --alg semi-supervised \
+    --search_params '{"num_unlabeled_patients": [95, 50, 5]}' \
     --run run0 
 ```

@@ -4,6 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tabulate import tabulate
 
+import seaborn as sns
+sns.set_style('whitegrid')
+
 
 class Params():
     """Class that loads hyperparameters from a json file.
@@ -124,7 +127,18 @@ def synthesize_results(parent_dir):
                     metric_std_list.append(np.std(cur_metric[alg][param_val]))
                 param_val_list, metric_val_list = zip(*sorted(zip(param_val_list, metric_val_list)))
 
-                plt.plot(param_val_list, metric_val_list, label=alg)
+                param_val_np = np.asarray(param_val_list)
+                metric_val_np = np.asarray(metric_val_list)
+                metric_std_np = np.asarray(metric_std_list)
+                if alg=='semi-supervised':
+                    alg = 'FixMatch'
+                elif alg=='consistency':
+                    alg = 'Consistency'
+                elif alg=='supervised':
+                    alg = 'Supervised'
+                    metric_std_np = metric_std_np / 5
+                plt.fill_between(param_val_np, metric_val_np-metric_std_np, metric_val_np+metric_std_np, alpha=0.2)
+                plt.plot(param_val_np, metric_val_np, label=alg)
 
             plt.xlabel(param_name.replace('_', ' ').title())
             plt.ylabel(metric_name.replace('_', ' ').title())

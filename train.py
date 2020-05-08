@@ -2,15 +2,17 @@ import os
 import logging
 import numpy as np
 from tqdm import tqdm
+from matplotlib import pyplot as plt
 
 import torch
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
 
+from datasets.transforms import ToTensor, ToImage
 from evaluate import evaluate
 from utils.params import Params, save_dict_to_json, load_dict_to_json
 from utils.logger import RunningAverage, set_logger, save_checkpoint, load_checkpoint
-from utils.visualizer import normalize_tensor
+from utils.visualizer import normalize_tensor, plot_samples
 
 
 def supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params):
@@ -56,6 +58,7 @@ def semi_supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_b
                 b_mask = (b_pred > 0.5).detach().cpu().numpy().transpose(1, 2, 0)
                 b_image = unl_image_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
                 b_image, b_mask = params.strong_transforms((b_image, b_mask))
+                b_image, b_mask = ToTensor()((b_image, b_mask))
                 b_image, b_mask = b_image.to(params.device).unsqueeze(0), b_mask.to(params.device).unsqueeze(0)
                 b_pred = model(b_image)
                 unl_loss += loss_fn(b_pred, b_mask)
@@ -88,6 +91,7 @@ def consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch
         b_image = unl_image_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
         b_mask = unl_pred_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
         b_image, b_mask = params.week_transforms((b_image, b_mask))
+        b_image, b_mask = ToTensor()((b_image, b_mask))
         b_image, b_mask = b_image.to(params.device).unsqueeze(0), b_mask.to(params.device).unsqueeze(0)
         b_pred = model(b_image)
         unl_loss += loss_fn(b_pred, b_mask)
@@ -97,6 +101,95 @@ def consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch
         unl_loss = unl_loss / unl_counter
         unl_loss = unl_loss / 10
     return lab_loss, unl_loss
+
+
+# def consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params):
+#     """Semi-supervised training algorithm with consistency loss
+#     Args:
+#         model: (torch.nn.Module) the neural network
+#         loss_fn: a function that takes batch_output and batch_labels and computes the loss for the batch
+#         lab_image_batch: (torch.tensor) a batch of labeled images
+#         lab_mask_batch: (torch.tensor) a batch of masks
+#         unl_image_batch: (torch.tensor) a batch of unlabeled images
+#         params: (Params) hyperparameters
+#     """
+    
+#     lab_pred_batch = model(lab_image_batch)
+#     lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
+    
+#     unl_pred_batch = model(unl_image_batch)
+#     unl_loss = torch.zeros(1).to(params.device)
+#     unl_counter = torch.zeros(1).to(params.device)
+#     for b in range(params.batch_ratio*params.batch_size):
+#         b_image = unl_image_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
+#         b_mask = unl_pred_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
+#         plt.figure()
+#         plt.imshow(b_image)
+#         plt.show()
+#         plt.figure()
+#         plt.imshow(b_mask[:, :, 0])
+#         plt.show()
+#         # plot_samples([(b_image, b_mask)])
+#         b_image, b_mask = params.strong_transforms((b_image, b_mask))
+#         # plot_samples([(b_image, b_mask)])
+#         b_image, b_mask = b_image.to(params.device).unsqueeze(0), b_mask.to(params.device).unsqueeze(0)
+#         b_pred = model(b_image)
+#         unl_loss += loss_fn(b_pred, b_mask)
+#         unl_counter += 1
+#     if unl_counter.item() > 0:
+#         unl_loss = unl_loss / unl_counter
+#         unl_loss = unl_loss / 10
+#         # unl_loss = torch.zeros(1).to(params.device)
+
+# #     unl_image_batch_np = unl_image_batch.detach().cpu().numpy().transpose(0, 2, 3, 1)
+# #     unl_pred_batch_np = unl_pred_batch.detach().cpu().numpy().transpose(0, 2, 3, 1)
+# #     tr_unl_image_batch_np, tr_unl_mask_batch_np = params.strong_transforms((unl_image_batch_np, unl_pred_batch_np))
+# #     tr_unl_image_batch, tr_unl_mask_batch = tr_unl_image_batch_np.to(params.device), tr_unl_mask_batch_np.to(params.device)
+    
+# #     tr_unl_pred_batch = model(tr_unl_image_batch)
+# #     unl_loss = loss_fn(tr_unl_pred_batch, tr_unl_mask_batch)
+#     return lab_loss, unl_loss
+
+
+# def confidence_map(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params):
+#     """Confidence-map training algorithm
+#     Args:
+#         model: (torch.nn.Module) the neural network
+#         loss_fn: a function that takes batch_output and batch_labels and computes the loss for the batch
+#         lab_image_batch: (torch.tensor) a batch of labeled images
+#         lab_mask_batch: (torch.tensor) a batch of masks
+#         unl_image_batch: (torch.tensor) a batch of unlabeled images
+#         params: (Params) hyperparameters
+#     """
+    
+#     lab_pred_batch = model(lab_image_batch)
+#     unl_pred_batch = model(unl_image_batch)
+            
+#     lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
+
+#     unl_loss = torch.zeros(1).to(params.device)
+#     unl_counter = torch.zeros(1).to(params.device)
+#     for b in range(params.batch_ratio*params.batch_size):
+#         b_pred = unl_pred_batch[b]
+#         b_pred = b_pred.detach().cpu().numpy().transpose(1, 2, 0)
+#         b_image = unl_image_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
+#         b_image, b_pred = params.strong_transforms((b_image, b_pred))
+#         b_image, b_pred = b_image.to(params.device).unsqueeze(0), b_pred.to(params.device).unsqueeze(0)
+        
+#         pos_pred = (b_pred > 0.99)
+#         neg_pred = (b_pred < 0.01)
+#         conf_map = pos_pred + neg_pred
+#         # print(conf_map.sum())
+#         b_mask = (b_pred > 0.5)
+    
+#         b_pred = model(b_image)
+#         unl_loss += loss_fn(b_pred[0, ...] * conf_map, b_mask[0, ...] * conf_map)
+#         unl_counter += 1
+
+#     if unl_counter.item() > 0:
+#         unl_loss = unl_loss / unl_counter
+#         unl_loss = unl_loss / 10
+#     return lab_loss, unl_loss
 
 
 def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_loader, metrics, params):
@@ -143,6 +236,8 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
                 lab_loss, unl_loss = supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params)
             elif algorithm == 'semi-supervised':
                 lab_loss, unl_loss = semi_supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params)
+            elif algorithm == 'confidence-map':
+                lab_loss, unl_loss = confidence_map(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params)
             elif algorithm == 'consistency':
                 lab_loss, unl_loss = consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params)
             else:
@@ -222,7 +317,6 @@ def train_eval(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_l
     while epoch < params.num_epochs:
         epoch += 1
         logging.info("Epoch {}/{}".format(epoch, params.num_epochs))
-        
         
         train_metrics, train_samples = train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_loader, 
                                     metrics, params)

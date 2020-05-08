@@ -1,4 +1,7 @@
 import numpy as np
+import random
+
+import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
@@ -46,9 +49,25 @@ class ToImage(object):
                 image = image.transpose(1, 2, 0)
                 sample.append(image)
             return tuple(sample)
-        
 
-def get_transforms(params, mode='week'):
+
+
+def get_transforms(params, mode='week', totensor=False):
+    """Get the transformations from JSON file
+    
+    Nonlinear Transform:
+    "elastic": [2, 0.25],
+    
+    PIL Transforms:
+    "autocontrast": 0,
+    "equalize": 0,
+    "enhance_brightness": [0.1, 1.8],
+    "enhance_color": [0.1, 1.8],
+    "enhance_contrast": [0.1, 1.8],
+    "enhance_sharpness":[0.1, 1.8],
+    "posterize": [4, 4],
+    """
+    
     if mode=='week':
         augs_dict = params.week_augmentations
     elif mode=='strong':
@@ -57,7 +76,10 @@ def get_transforms(params, mode='week'):
         raise NotImplemented
     
     iaa_list = []
+    num_augs = len(augs_dict)
     for aug in augs_dict:
+        if aug == 'num_augmentations':
+            num_augs = augs_dict[aug]
         if aug == 'scale':
             scale = tuple(augs_dict[aug])
             iaa_list.append(iaa.Affine(scale=scale))
@@ -73,17 +95,46 @@ def get_transforms(params, mode='week'):
             iaa_list.append(iaa.ShearX(shear=shear))
             iaa_list.append(iaa.ShearX(shear=shear))
         if aug == 'elastic':
-            # "elastic": [2, 0.25],
             elastic = tuple(augs_dict[aug])
             iaa_list.append(iaa.ElasticTransformation(alpha=(0, elastic[0]), sigma=(0, elastic[1])))
         if aug == 'flip':
             flip = augs_dict[aug]
             iaa_list.append(iaa.Fliplr(flip))
-            
-    iaa_augs = iaa.Sequential(iaa_list)
-    transforms = Compose([Augmentation(iaa_augs), ToTensor()])
+        if aug == 'identity':
+            iaa_list.append(iaa.Identity())
+        if aug == 'autocontrast':
+            iaa_list.append(iaa.pillike.Autocontrast())
+        if aug == 'equalize':
+            iaa_list.append(iaa.pillike.Equalize())
+        if aug == 'enhance_brightness':
+            factor = tuple(augs_dict[aug])
+            iaa_list.append(iaa.pillike.EnhanceBrightness(factor=factor))
+        if aug == 'enhance_color':
+            factor = tuple(augs_dict[aug])
+            iaa_list.append(iaa.pillike.EnhanceColor(factor=factor))
+        if aug == 'enhance_contrast':
+            factor = tuple(augs_dict[aug])
+            iaa_list.append(iaa.pillike.EnhanceContrast(factor=factor))
+        if aug == 'enhance_sharpness':
+            factor = tuple(augs_dict[aug])
+            iaa_list.append(iaa.pillike.EnhanceSharpness(factor=factor))
+        if aug == 'cutout':
+            size = tuple(augs_dict[aug])
+            iaa_list.append(iaa.Cutout(nb_iterations=(1, size[0]), size=size[1], cval=0))
+        if aug == 'posterize':
+            nb_bits = tuple(augs_dict[aug])
+            iaa_list.append(iaa.color.Posterize(nb_bits=nb_bits))
+        if aug == 'solarize':
+            threshold = tuple(augs_dict[aug])
+            iaa_list.append(iaa.Solarize(0.5, threshold=threshold))
+    
+    iaa_augs = iaa.Sequential(iaa.SomeOf(num_augs,iaa_list))
+    if totensor:
+        transforms = Compose([Augmentation(iaa_augs), ToTensor()])
+    else:
+        transforms = Augmentation(iaa_augs)
     return transforms
         
-        
+    
         
     
