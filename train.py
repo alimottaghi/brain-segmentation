@@ -45,27 +45,35 @@ def semi_supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_b
     """
     
     lab_pred_batch = model(lab_image_batch)
-    unl_pred_batch = model(unl_image_batch)
-            
     lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
+    
+    if lab_loss.item() > 0.5:
+        unl_loss = torch.zeros(1).to(params.device)
+    else:
+        unl_pred_batch = model(unl_image_batch)
+        new_image_batch, new_mask_batch = torch.zeros_like(unl_image_batch), torch.zeros_like(unl_pred_batch)
+        c = 0
+        for b in range(params.batch_ratio*params.batch_size):
+            b_pred = unl_pred_batch[b]
+            if ((b_pred > 0.5).any() and b_pred[b_pred > 0.5].mean() > 0.99) or (not (b_pred > 0.5).any()):
+                if (b_pred < 0.5).any() and b_pred[b_pred < 0.5].mean() < 0.01:
+                    b_mask = (b_pred > 0.5).float()
+                    b_image, b_mask = ToImage()((unl_image_batch[b], b_mask))
+                    b_image, b_mask = params.strong_transforms((b_image, b_mask))
+                    b_image, b_mask = ToTensor()((b_image, b_mask))
+                    new_image_batch[c], new_mask_batch[c] = b_image, b_mask
+                    c += 1
+        new_image_batch, new_mask_batch = new_image_batch.to(params.device), new_mask_batch.to(params.device)
+        new_pred_batch = model(new_image_batch)
+        unl_loss = loss_fn(new_pred_batch[:c, ...], new_mask_batch[:c, ...])
 
-    unl_loss = torch.zeros(1).to(params.device)
-    unl_counter = torch.zeros(1).to(params.device)
-    for b in range(params.batch_ratio*params.batch_size):
-        b_pred = unl_pred_batch[b]
-        if (b_pred > 0.5).any() and b_pred[b_pred > 0.5].mean() > 0.99:
-            if (b_pred < 0.5).any() and b_pred[b_pred < 0.5].mean() < 0.01:
-                b_mask = (b_pred > 0.5).detach().cpu().numpy().transpose(1, 2, 0)
-                b_image = unl_image_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
-                b_image, b_mask = params.strong_transforms((b_image, b_mask))
-                b_image, b_mask = ToTensor()((b_image, b_mask))
-                b_image, b_mask = b_image.to(params.device).unsqueeze(0), b_mask.to(params.device).unsqueeze(0)
-                b_pred = model(b_image)
-                unl_loss += loss_fn(b_pred, b_mask)
-                unl_counter += 1
-
-    if unl_counter.item() > 0:
-        unl_loss = unl_loss / unl_counter
+        if params.step % params.save_summary_steps == 0:
+            new_image_grid = normalize_tensor(torchvision.utils.make_grid(new_image_batch, nrow=4))
+            new_pred_grid = torchvision.utils.make_grid(new_pred_batch, nrow=4)
+            new_mask_grid = torchvision.utils.make_grid(new_mask_batch, nrow=4)
+            params.writer.add_image('consistency/image', new_image_grid, params.step)
+            params.writer.add_image('consistency/pred', new_pred_grid, params.step)
+            params.writer.add_image('consistency/mask', new_mask_grid, params.step)
     return lab_loss, unl_loss
 
 
@@ -81,115 +89,30 @@ def consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch
     """
     
     lab_pred_batch = model(lab_image_batch)
-    unl_pred_batch = model(unl_image_batch)
-            
     lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
+    
+    if lab_loss.item() > 0.5:
+        unl_loss = torch.zeros(1).to(params.device)
+    else:
+        unl_pred_batch = model(unl_image_batch)
+        new_image_batch, new_mask_batch = torch.zeros_like(unl_image_batch), torch.zeros_like(unl_pred_batch)
+        for b in range(params.batch_ratio*params.batch_size):
+            b_image, b_mask = ToImage()((unl_image_batch[b], unl_pred_batch[b]))
+            b_image, b_mask = params.strong_transforms((b_image, b_mask))
+            b_image, b_mask = ToTensor()((b_image, b_mask))
+            new_image_batch[b], new_mask_batch[b] = b_image, b_mask
+        new_image_batch, new_mask_batch = new_image_batch.to(params.device), new_mask_batch.to(params.device)
+        new_pred_batch = model(new_image_batch)
+        unl_loss = loss_fn(new_pred_batch, new_mask_batch)
 
-    unl_loss = torch.zeros(1).to(params.device)
-    unl_counter = torch.zeros(1).to(params.device)
-    for b in range(params.batch_ratio*params.batch_size):
-        b_image = unl_image_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
-        b_mask = unl_pred_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
-        b_image, b_mask = params.week_transforms((b_image, b_mask))
-        b_image, b_mask = ToTensor()((b_image, b_mask))
-        b_image, b_mask = b_image.to(params.device).unsqueeze(0), b_mask.to(params.device).unsqueeze(0)
-        b_pred = model(b_image)
-        unl_loss += loss_fn(b_pred, b_mask)
-        unl_counter += 1
-
-    if unl_counter.item() > 0:
-        unl_loss = unl_loss / unl_counter
-        unl_loss = unl_loss / 10
+        if params.step % params.save_summary_steps == 0:
+            new_image_grid = normalize_tensor(torchvision.utils.make_grid(new_image_batch, nrow=4))
+            new_pred_grid = torchvision.utils.make_grid(new_pred_batch, nrow=4)
+            new_mask_grid = torchvision.utils.make_grid(new_mask_batch, nrow=4)
+            params.writer.add_image('consistency/image', new_image_grid, params.step)
+            params.writer.add_image('consistency/pred', new_pred_grid, params.step)
+            params.writer.add_image('consistency/mask', new_mask_grid, params.step)
     return lab_loss, unl_loss
-
-
-# def consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params):
-#     """Semi-supervised training algorithm with consistency loss
-#     Args:
-#         model: (torch.nn.Module) the neural network
-#         loss_fn: a function that takes batch_output and batch_labels and computes the loss for the batch
-#         lab_image_batch: (torch.tensor) a batch of labeled images
-#         lab_mask_batch: (torch.tensor) a batch of masks
-#         unl_image_batch: (torch.tensor) a batch of unlabeled images
-#         params: (Params) hyperparameters
-#     """
-    
-#     lab_pred_batch = model(lab_image_batch)
-#     lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
-    
-#     unl_pred_batch = model(unl_image_batch)
-#     unl_loss = torch.zeros(1).to(params.device)
-#     unl_counter = torch.zeros(1).to(params.device)
-#     for b in range(params.batch_ratio*params.batch_size):
-#         b_image = unl_image_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
-#         b_mask = unl_pred_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
-#         plt.figure()
-#         plt.imshow(b_image)
-#         plt.show()
-#         plt.figure()
-#         plt.imshow(b_mask[:, :, 0])
-#         plt.show()
-#         # plot_samples([(b_image, b_mask)])
-#         b_image, b_mask = params.strong_transforms((b_image, b_mask))
-#         # plot_samples([(b_image, b_mask)])
-#         b_image, b_mask = b_image.to(params.device).unsqueeze(0), b_mask.to(params.device).unsqueeze(0)
-#         b_pred = model(b_image)
-#         unl_loss += loss_fn(b_pred, b_mask)
-#         unl_counter += 1
-#     if unl_counter.item() > 0:
-#         unl_loss = unl_loss / unl_counter
-#         unl_loss = unl_loss / 10
-#         # unl_loss = torch.zeros(1).to(params.device)
-
-# #     unl_image_batch_np = unl_image_batch.detach().cpu().numpy().transpose(0, 2, 3, 1)
-# #     unl_pred_batch_np = unl_pred_batch.detach().cpu().numpy().transpose(0, 2, 3, 1)
-# #     tr_unl_image_batch_np, tr_unl_mask_batch_np = params.strong_transforms((unl_image_batch_np, unl_pred_batch_np))
-# #     tr_unl_image_batch, tr_unl_mask_batch = tr_unl_image_batch_np.to(params.device), tr_unl_mask_batch_np.to(params.device)
-    
-# #     tr_unl_pred_batch = model(tr_unl_image_batch)
-# #     unl_loss = loss_fn(tr_unl_pred_batch, tr_unl_mask_batch)
-#     return lab_loss, unl_loss
-
-
-# def confidence_map(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params):
-#     """Confidence-map training algorithm
-#     Args:
-#         model: (torch.nn.Module) the neural network
-#         loss_fn: a function that takes batch_output and batch_labels and computes the loss for the batch
-#         lab_image_batch: (torch.tensor) a batch of labeled images
-#         lab_mask_batch: (torch.tensor) a batch of masks
-#         unl_image_batch: (torch.tensor) a batch of unlabeled images
-#         params: (Params) hyperparameters
-#     """
-    
-#     lab_pred_batch = model(lab_image_batch)
-#     unl_pred_batch = model(unl_image_batch)
-            
-#     lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
-
-#     unl_loss = torch.zeros(1).to(params.device)
-#     unl_counter = torch.zeros(1).to(params.device)
-#     for b in range(params.batch_ratio*params.batch_size):
-#         b_pred = unl_pred_batch[b]
-#         b_pred = b_pred.detach().cpu().numpy().transpose(1, 2, 0)
-#         b_image = unl_image_batch[b].detach().cpu().numpy().transpose(1, 2, 0)
-#         b_image, b_pred = params.strong_transforms((b_image, b_pred))
-#         b_image, b_pred = b_image.to(params.device).unsqueeze(0), b_pred.to(params.device).unsqueeze(0)
-        
-#         pos_pred = (b_pred > 0.99)
-#         neg_pred = (b_pred < 0.01)
-#         conf_map = pos_pred + neg_pred
-#         # print(conf_map.sum())
-#         b_mask = (b_pred > 0.5)
-    
-#         b_pred = model(b_image)
-#         unl_loss += loss_fn(b_pred[0, ...] * conf_map, b_mask[0, ...] * conf_map)
-#         unl_counter += 1
-
-#     if unl_counter.item() > 0:
-#         unl_loss = unl_loss / unl_counter
-#         unl_loss = unl_loss / 10
-#     return lab_loss, unl_loss
 
 
 def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_loader, metrics, params):
@@ -211,11 +134,10 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
     
     summ = []
     loss_avg = RunningAverage()
-    lab_loss_avg = RunningAverage()
-    unl_loss_avg = RunningAverage()
     
     with tqdm(total=len(labeled_loader)) as pbar:
         for i, (lab_image_batch, lab_mask_batch) in enumerate(labeled_loader):
+            params.step = params.epoch * len(labeled_loader) + i
             
             try:
                 unl_image_batch, unl_mask_batch = next(unlabeled_iter)
@@ -259,8 +181,6 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
                 summ.append(summary_batch)
             
             loss_avg.update(loss.item())
-            lab_loss_avg.update(lab_loss.item())
-            unl_loss_avg.update(unl_loss.item())
             pbar.set_postfix(loss='{:05.3f}'.format(loss_avg()))
             pbar.update()
     
@@ -313,9 +233,11 @@ def train_eval(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_l
     if not os.path.exists(log_path):
         os.mkdir(log_path)
     writer = SummaryWriter(log_path)
+    params.writer = writer
     
     while epoch < params.num_epochs:
         epoch += 1
+        params.epoch = epoch
         logging.info("Epoch {}/{}".format(epoch, params.num_epochs))
         
         train_metrics, train_samples = train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_loader, 

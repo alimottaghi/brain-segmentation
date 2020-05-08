@@ -4,6 +4,7 @@ import random
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
+from imgaug.augmentables.heatmaps import HeatmapsOnImage
 
 import torch
 from torchvision.transforms import Compose
@@ -11,14 +12,20 @@ from torchvision.transforms import Compose
 
 class Augmentation(object):
 
-    def __init__(self, pipeline):
+    def __init__(self, pipeline, use_heatmap=True):
         self.pipeline = pipeline
+        self.use_heatmap = use_heatmap
 
     def __call__(self, sample):
         image, mask = sample
-        segmap = SegmentationMapsOnImage(mask.astype(np.int32), shape=image.shape)
-        image_aug, segmap_aug = self.pipeline(image=image, segmentation_maps=segmap)
-        mask_aug = segmap_aug.get_arr()
+        if self.use_heatmap:
+            heatmap = HeatmapsOnImage(mask.astype(np.float32), shape=image.shape)
+            image_aug, heatmap_aug = self.pipeline(image=image, heatmaps=heatmap)
+            mask_aug = heatmap_aug.get_arr()
+        else:
+            segmap = SegmentationMapsOnImage(mask.astype(np.int32), shape=image.shape)
+            image_aug, segmap_aug = self.pipeline(image=image, segmentation_maps=segmap)
+            mask_aug = segmap_aug.get_arr()
         sample_aug = image_aug, mask_aug
         return sample_aug
 
