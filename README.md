@@ -31,6 +31,6 @@ To train and evaluate a model run:
 
 ```
 CUDA_VISIBLE_DEVICES=0 python main.py --alg semi-supervised \
-    --search_params '{"num_unlabeled_patients": [95, 50, 5]}' \
+    --search_params '{"num_labeled_patients": [10, 50, 90]}' \
     --run run0 
 ```

@@ -52,8 +52,8 @@ def list_images(root_dir, subset, params):
     random.seed(params.seed)
     validation_patients = random.sample(all_patients, k=params.num_validation_patients)
     train_patients = sorted(list(set(all_patients).difference(validation_patients)))
-    unlabeled_patients = random.sample(train_patients, k=params.num_unlabeled_patients)
-    labeled_patients = sorted(list(set(train_patients).difference(unlabeled_patients)))
+    labeled_patients = random.sample(train_patients, k=params.num_labeled_patients)
+    unlabeled_patients = sorted(list(set(train_patients).difference(labeled_patients)))
         
     if subset == "train":
         patients = train_patients

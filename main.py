@@ -26,7 +26,7 @@ parser.add_argument('--base_file', default='base_params.json', help="Path of bas
 parser.add_argument('--alg', default='supervised', help="Algorithm for the training (supervised or semi-supervised)")
 parser.add_argument('--run', default='run0', help="Run suffix")
 parser.add_argument('--restore', default=True, help="Restore the previous checkpoint (if exists) or not")
-parser.add_argument('--search_params', type=json.loads, default='{"num_unlabeled_patients": [95, 50, 5]}', help="Dictionary for hyperparameters to tune (in string format)")
+parser.add_argument('--search_params', type=json.loads, default='{"num_labeled_patients": [10, 50, 90]}', help="Dictionary for hyperparameters to tune (in string format)")
 
 
 def lunch_training_job(algorithm, model_dir, data_dir, params):
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     if args.data_dir is None:
         if 'sailhome' in os.getcwd():
             data_dir = '/pasteur/data/lgg-mri-segmentation/processed'
-        elif 'syyeung' in os.getcwd():
+        elif 'users' in os.getcwd():
             data_dir = '/home/groups/syyeung/lgg-mri-segmentation/processed'
         elif '/home/mottaghi' in os.getcwd():
             data_dir = '/home/mottaghi/data/lgg-mri-segmentation/processed'
@@ -90,8 +90,9 @@ if __name__ == "__main__":
         if 'sailhome' in os.getcwd():
             exp_dir = '/pasteur/u/mottaghi/brain-segmentation/experiments'
             # exp_dir = '/pasteur/results/brain-segmentation/experiments'
-        elif 'syyeung' in os.getcwd():
-            exp_dir = '/scratch/groups/syyeung/brain-segmentation/experiments'
+        elif 'users' in os.getcwd():
+            exp_dir = '/scratch/users/mottaghi/brain-segmentation/experiments'
+            # exp_dir = '/scratch/groups/syyeung/brain-segmentation/experiments'
         elif '/home/mottaghi' in os.getcwd():
             exp_dir = '/home/mottaghi/experiments/'
         else:

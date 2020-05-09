@@ -6,3 +6,5 @@ tabulate
 tqdm
 tifffile
 imgaug
+matplotlib
+seaborn

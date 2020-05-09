@@ -64,6 +64,9 @@ def get_transforms(params, mode='week', totensor=False):
     
     Nonlinear Transform:
     "elastic": [2, 0.25],
+    "identity": 0,
+    "cutout": [4, 0.2],
+    "solarize": [0, 256]
     
     PIL Transforms:
     "autocontrast": 0,
@@ -135,7 +138,8 @@ def get_transforms(params, mode='week', totensor=False):
             threshold = tuple(augs_dict[aug])
             iaa_list.append(iaa.Solarize(0.5, threshold=threshold))
     
-    iaa_augs = iaa.Sequential(iaa.SomeOf(num_augs,iaa_list))
+    # iaa_augs = iaa.Sequential(iaa.SomeOf(num_augs,iaa_list))
+    iaa_augs = iaa.Sequential(iaa_list)
     if totensor:
         transforms = Compose([Augmentation(iaa_augs), ToTensor()])
     else:

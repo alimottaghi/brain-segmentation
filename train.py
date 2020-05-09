@@ -235,9 +235,12 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
             pbar.set_postfix(loss='{:05.3f}'.format(loss_avg()))
             pbar.update()
     
-    metrics_mean = {metric: np.mean([x[metric] for x in summ]) for metric in summ[0]}
-    metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
-    logging.info("- Train metrics: " + metrics_string)
+    if len(summ):
+        metrics_mean = {metric: np.mean([x[metric] for x in summ]) for metric in summ[0]}
+        metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
+        logging.info("- Train metrics: " + metrics_string)
+    else:
+        metrics_mean = None
     
     lab_image_grid = normalize_tensor(torchvision.utils.make_grid(lab_image_batch, nrow=4))
     unl_image_grid = normalize_tensor(torchvision.utils.make_grid(unl_image_batch, nrow=4))
