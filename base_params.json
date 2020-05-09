@@ -1,7 +1,7 @@
 {
     "dataset": "brain-segmentation",
     "num_validation_patients": 10,
-    "num_unlabeled_patients": 50,
+    "num_unlabeled_patients": 95,
     "week_augmentations": {
         "num_augmentations": 2,
         "scale": [0.95, 1.05],

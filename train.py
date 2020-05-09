@@ -71,9 +71,10 @@ def semi_supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_b
             new_image_grid = normalize_tensor(torchvision.utils.make_grid(new_image_batch, nrow=4))
             new_pred_grid = torchvision.utils.make_grid(new_pred_batch, nrow=4)
             new_mask_grid = torchvision.utils.make_grid(new_mask_batch, nrow=4)
-            params.writer.add_image('consistency/image', new_image_grid, params.step)
-            params.writer.add_image('consistency/pred', new_pred_grid, params.step)
-            params.writer.add_image('consistency/mask', new_mask_grid, params.step)
+            samples_grid = {'consistency/image': new_image_grid, 'consistency/pred': new_pred_grid, 
+                    'consistency/mask': new_mask_grid}
+            for sample in samples_grid:
+                params.writer.add_image(sample, samples_grid[sample], params.step)
     return lab_loss, unl_loss
 
 
@@ -109,9 +110,10 @@ def consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch
             new_image_grid = normalize_tensor(torchvision.utils.make_grid(new_image_batch, nrow=4))
             new_pred_grid = torchvision.utils.make_grid(new_pred_batch, nrow=4)
             new_mask_grid = torchvision.utils.make_grid(new_mask_batch, nrow=4)
-            params.writer.add_image('consistency/image', new_image_grid, params.step)
-            params.writer.add_image('consistency/pred', new_pred_grid, params.step)
-            params.writer.add_image('consistency/mask', new_mask_grid, params.step)
+            samples_grid = {'consistency/image': new_image_grid, 'consistency/pred': new_pred_grid, 
+                    'consistency/mask': new_mask_grid}
+            for sample in samples_grid:
+                params.writer.add_image(sample, samples_grid[sample], params.step)
     return lab_loss, unl_loss
 
 
@@ -153,10 +155,10 @@ def confidence_map(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_ba
             new_pred_grid = torchvision.utils.make_grid(new_pred_batch, nrow=4)
             new_mask_grid = torchvision.utils.make_grid(new_mask_batch, nrow=4)
             new_conf_grid = torchvision.utils.make_grid(conf_map_batch, nrow=4)
-            params.writer.add_image('consistency/image', new_image_grid, params.step)
-            params.writer.add_image('consistency/pred', new_pred_grid, params.step)
-            params.writer.add_image('consistency/mask', new_mask_grid, params.step)
-            params.writer.add_image('consistency/conf', new_conf_grid, params.step)
+            samples_grid = {'consistency/image': new_image_grid, 'consistency/pred': new_pred_grid, 
+                    'consistency/mask': new_mask_grid, 'consistency/conf': new_conf_grid}
+            for sample in samples_grid:
+                params.writer.add_image(sample, samples_grid[sample], params.step)
     return lab_loss, unl_loss
 
 
@@ -175,20 +177,20 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
     
     model.train()
     
-    unlabeled_iter = iter(unlabeled_loader)
+    labeled_iter = iter(labeled_loader)
     
     summ = []
     loss_avg = RunningAverage()
     
-    with tqdm(total=len(labeled_loader)) as pbar:
-        for i, (lab_image_batch, lab_mask_batch) in enumerate(labeled_loader):
-            params.step = params.epoch * len(labeled_loader) + i
+    with tqdm(total=len(unlabeled_loader)) as pbar:
+        for i, (unl_image_batch, unl_mask_batch) in enumerate(unlabeled_loader):
+            params.step = (params.epoch - 1) * len(unlabeled_loader) + i
             
             try:
-                unl_image_batch, unl_mask_batch = next(unlabeled_iter)
+                lab_image_batch, lab_mask_batch = next(labeled_iter)
             except StopIteration:
-                unlabeled_iter = iter(unlabeled_loader)
-                unl_image_batch, unl_mask_batch = next(unlabeled_iter)
+                labeled_iter = iter(labeled_loader)
+                lab_image_batch, lab_mask_batch = next(labeled_iter)
             
             lab_image_batch, lab_mask_batch, unl_image_batch, unl_mask_batch, = lab_image_batch.to(
                 params.device, non_blocking=True), lab_mask_batch.to(
@@ -216,13 +218,17 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
             loss.backward()
             optimizer.step()
             
-            if i % params.save_summary_steps == 0:
+            if params.step % params.save_summary_steps == 0:
                 lab_pred_batch_np = lab_pred_batch.detach().cpu().numpy()
                 lab_mask_batch_np = lab_mask_batch.detach().cpu().numpy()
                 summary_batch = {metric: metrics[metric](lab_pred_batch_np, lab_mask_batch_np) for metric in metrics}
                 summary_batch['labeled loss'] = lab_loss.item()
                 summary_batch['unlabeled loss'] = unl_loss.item()
                 summary_batch['loss'] = loss.item()
+                for metric in summary_batch:
+                    tag = metric.replace(" ", "_")
+                    tag = ('loss/' + tag) if 'loss' in tag else tag
+                    params.writer.add_scalars(tag, {'train': summary_batch[metric]}, params.step)
                 summ.append(summary_batch)
             
             loss_avg.update(loss.item())
@@ -242,6 +248,8 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
     samples_grid = {'images/train_lab': lab_image_grid, 'preds/train_lab': lab_pred_grid, 
                     'masks/train_lab': lab_mask_grid, 'images/train_unl': unl_image_grid, 
                     'preds/train_unl': unl_pred_grid, 'masks/train_unl': unl_mask_grid}
+    for sample in samples_grid:
+        params.writer.add_image(sample, samples_grid[sample], params.step)
     return metrics_mean, samples_grid
             
 
@@ -285,25 +293,19 @@ def train_eval(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_l
         params.epoch = epoch
         logging.info("Epoch {}/{}".format(epoch, params.num_epochs))
         
-        train_metrics, train_samples = train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_loader, 
-                                    metrics, params)
+        train_metrics, train_samples = train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, 
+                                                   unlabeled_loader,metrics, params)
         
         val_metrics, val_samples = evaluate(model, loss_fn, val_loader, metrics, params)
         
-        for metric in train_metrics:
+        for metric in val_metrics:
             tag = metric.replace(" ", "_")
             tag = ('loss/' + tag) if 'loss' in tag else tag
-            if metric in val_metrics:
-                writer.add_scalars(tag,
-                                  {'train': train_metrics[metric], 
-                                  'validation': val_metrics[metric]},
-                                  epoch * len(labeled_loader))
-            else:
-                writer.add_scalar(tag, train_metrics[metric], epoch * len(labeled_loader))
-        for sample in train_samples:
-            writer.add_image(sample, train_samples[sample], epoch * len(labeled_loader))
+            writer.add_scalars(tag,
+                               {'validation': val_metrics[metric]},
+                                epoch * len(unlabeled_loader))
         for sample in val_samples:
-            writer.add_image(sample, val_samples[sample], epoch * len(labeled_loader))
+             writer.add_image(sample, val_samples[sample], epoch * len(unlabeled_loader))
         
         val_score = val_metrics['dice score']
         is_best = val_score >= best_val_score
