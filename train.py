@@ -291,10 +291,12 @@ def train_eval(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_l
     writer = SummaryWriter(log_path)
     params.writer = writer
     
-    while epoch < params.num_epochs:
+    num_epochs = params.num_epochs
+    num_epochs = num_epochs * int(1 + len(labeled_loader)/len(unlabeled_loader))
+    while epoch < num_epochs:
         epoch += 1
         params.epoch = epoch
-        logging.info("Epoch {}/{}".format(epoch, params.num_epochs))
+        logging.info("Epoch {}/{}".format(epoch, num_epochs))
         
         train_metrics, train_samples = train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, 
                                                    unlabeled_loader,metrics, params)

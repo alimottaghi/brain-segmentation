@@ -133,10 +133,11 @@ def synthesize_results(parent_dir):
                 if alg=='semi-supervised':
                     alg = 'FixMatch'
                 elif alg=='consistency':
-                    alg = 'Consistency'
+                    alg = 'Consistency Loss'
                 elif alg=='supervised':
                     alg = 'Supervised'
-                    metric_std_np = metric_std_np / 5
+                elif alg=='confidence-map':
+                    alg = 'Confidence Map'
                 plt.fill_between(param_val_np, metric_val_np-metric_std_np, metric_val_np+metric_std_np, alpha=0.2)
                 plt.plot(param_val_np, metric_val_np, label=alg)
 
