@@ -26,7 +26,10 @@ def supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch,
         params: (Params) hyperparameters
     """
     
-    lab_pred_batch = model(lab_image_batch)
+    if params.backbone == 'resnet':
+        lab_pred_batch = model(lab_image_batch)['out']
+    else: 
+        lab_pred_batch = model(lab_image_batch)
     lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
     
     unl_loss = torch.zeros(1).to(params.device)
@@ -89,31 +92,49 @@ def consistency(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch
         params: (Params) hyperparameters
     """
     
-    lab_pred_batch = model(lab_image_batch)
+    if params.backbone == 'resnet':
+        lab_pred_batch = model(lab_image_batch)['out']
+    else: 
+        lab_pred_batch = model(lab_image_batch)
     lab_loss = loss_fn(lab_pred_batch, lab_mask_batch)
     
     if lab_loss.item() > 0.5:
         unl_loss = torch.zeros(1).to(params.device)
     else:
-        unl_pred_batch = model(unl_image_batch)
-        new_image_batch, new_mask_batch = torch.zeros_like(unl_image_batch), torch.zeros_like(unl_pred_batch)
+        if params.backbone == 'resnet':
+            unl_pred_batch = model(unl_image_batch)['out']
+        else: 
+            unl_pred_batch = model(unl_image_batch)
+        if params.semantic == 'enable':
+            new_image_batch, new_mask_batch = torch.zeros_like(unl_image_batch), torch.zeros_like(unl_pred_batch[:,0,:,:])
+        else:
+            new_image_batch, new_mask_batch = torch.zeros_like(unl_image_batch), torch.zeros_like(unl_pred_batch)
         for b in range(params.batch_ratio*params.batch_size):
             b_image, b_mask = ToImage()((unl_image_batch[b], unl_pred_batch[b]))
+            if params.semantic == 'enable':
+                b_mask = np.argmax(b_mask,axis=2)
             b_image, b_mask = params.strong_transforms((b_image, b_mask))
-            b_image, b_mask = ToTensor()((b_image, b_mask))
+            if params.dataset == 'brats' or  params.dataset == 'brain-segmentation': 
+                b_image, b_mask = ToTensor()((b_image, b_mask))
             new_image_batch[b], new_mask_batch[b] = b_image, b_mask
         new_image_batch, new_mask_batch = new_image_batch.to(params.device), new_mask_batch.to(params.device)
-        new_pred_batch = model(new_image_batch)
+        if params.backbone == 'resnet':
+            new_pred_batch = model(new_image_batch)['out']
+        else: 
+            new_pred_batch = model(new_image_batch)
+        new_pred_batch = new_pred_batch.float()
+        new_mask_batch = new_mask_batch.long()
         unl_loss = loss_fn(new_pred_batch, new_mask_batch)
 
-        if params.step % params.save_summary_steps == 0:
-            new_image_grid = normalize_tensor(torchvision.utils.make_grid(new_image_batch, nrow=4))
-            new_pred_grid = torchvision.utils.make_grid(new_pred_batch, nrow=4)
-            new_mask_grid = torchvision.utils.make_grid(new_mask_batch, nrow=4)
-            samples_grid = {'consistency/image': new_image_grid, 'consistency/pred': new_pred_grid, 
-                    'consistency/mask': new_mask_grid}
-            for sample in samples_grid:
-                params.writer.add_image(sample, samples_grid[sample], params.step)
+        if params.dataset == 'brats' or params.dataset == 'brain-segmentation':
+            if params.step % params.save_summary_steps == 0:
+                new_image_grid = normalize_tensor(torchvision.utils.make_grid(new_image_batch, nrow=4))
+                new_pred_grid = torchvision.utils.make_grid(new_pred_batch, nrow=4)
+                new_mask_grid = torchvision.utils.make_grid(new_mask_batch, nrow=4)
+                samples_grid = {'consistency/image': new_image_grid, 'consistency/pred': new_pred_grid, 
+                        'consistency/mask': new_mask_grid}
+                for sample in samples_grid:
+                    params.writer.add_image(sample, samples_grid[sample], params.step)
     return lab_loss, unl_loss
 
 
@@ -198,8 +219,16 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
                 params.device, non_blocking=True), unl_mask_batch.to(
                 params.device, non_blocking=True)
             
-            lab_pred_batch = model(lab_image_batch)
-            unl_pred_batch = model(unl_image_batch)
+            if params.backbone == 'resnet':
+                lab_pred_batch = model(lab_image_batch)['out']
+                unl_pred_batch = model(unl_image_batch)['out']
+            else: 
+                lab_pred_batch = model(lab_image_batch)
+                unl_pred_batch = model(unl_image_batch)
+            lab_image_batch = lab_image_batch.float()
+            lab_mask_batch = lab_mask_batch.long()
+            unl_image_batch = unl_image_batch.float()
+            unl_mask_batch = unl_mask_batch.long()
             
             if algorithm == 'supervised':
                 lab_loss, unl_loss = supervised(model, loss_fn, lab_image_batch, lab_mask_batch, unl_image_batch, params)
@@ -251,8 +280,10 @@ def train_epoch(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_
     samples_grid = {'images/train_lab': lab_image_grid, 'preds/train_lab': lab_pred_grid, 
                     'masks/train_lab': lab_mask_grid, 'images/train_unl': unl_image_grid, 
                     'preds/train_unl': unl_pred_grid, 'masks/train_unl': unl_mask_grid}
-    for sample in samples_grid:
-        params.writer.add_image(sample, samples_grid[sample], params.step)
+    
+    if params.dataset == 'brats' or params.dataset == 'brain-segmentation':
+        for sample in samples_grid:
+            params.writer.add_image(sample, samples_grid[sample], params.step)
     return metrics_mean, samples_grid
             
 
@@ -309,8 +340,10 @@ def train_eval(algorithm, model, optimizer, loss_fn, labeled_loader, unlabeled_l
             writer.add_scalars(tag,
                                {'validation': val_metrics[metric]},
                                 epoch * len(unlabeled_loader))
-        for sample in val_samples:
-             writer.add_image(sample, val_samples[sample], epoch * len(unlabeled_loader))
+        
+        if params.dataset == 'brats' or params.dataset == 'brain-segmentation':
+            for sample in val_samples:
+                writer.add_image(sample, val_samples[sample], epoch * len(unlabeled_loader))
         
         val_score = val_metrics['dice score']
         is_best = val_score >= best_val_score

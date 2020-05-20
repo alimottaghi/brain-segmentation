@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from skimage.io import imsave
-
+from skimage.transform import resize
 import torch
 
 
@@ -71,4 +71,28 @@ def plot_samples(samples):
         plt.axis("off")
         plot_image_mask(*samples[i])
     plt.show()
-        
+    
+def resize_sample(x, size=256):
+    volume, mask = x
+    v_shape = volume.shape
+    #out_shape = (v_shape[0], size, size)
+    out_shape = (size, size)
+    mask = resize(
+        mask,
+        output_shape=out_shape,
+        order=0,
+        mode="constant",
+        cval=0,
+        anti_aliasing=False,
+    )
+    #out_shape = out_shape + (v_shape[3],)
+    out_shape = out_shape + (v_shape[2],)
+    volume = resize(
+        volume,
+        output_shape=out_shape,
+        order=1,
+        mode="constant",
+        cval=0,
+        anti_aliasing=False,
+    )
+    return volume, mask

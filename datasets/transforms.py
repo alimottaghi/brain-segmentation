@@ -35,7 +35,8 @@ class ToTensor(object):
     def __call__(self, sample):
         image, mask = sample
         image = image.transpose(2, 0, 1)
-        mask = mask.transpose(2, 0, 1)
+        if mask.ndim == 3:
+            mask = mask.transpose(2,0,1)
         image_tensor = torch.from_numpy(image.astype(np.float32))
         mask_tensor = torch.from_numpy(mask.astype(np.float32))
         sample_tensor = image_tensor, mask_tensor
@@ -53,7 +54,8 @@ class ToImage(object):
             sample = []
             for i, image in enumerate(sample_tensor):
                 image = image.detach().cpu().numpy()
-                image = image.transpose(1, 2, 0)
+                if image.ndim == 3:
+                    image = image.transpose(1, 2, 0)
                 sample.append(image)
             return tuple(sample)
 
@@ -141,7 +143,7 @@ def get_transforms(params, mode='week', totensor=False):
     # iaa_augs = iaa.Sequential(iaa.SomeOf(num_augs,iaa_list))
     iaa_augs = iaa.Sequential(iaa_list)
     if totensor:
-        transforms = Compose([Augmentation(iaa_augs), ToTensor()])
+        transforms = Compose([Augmentation(iaa_augs,use_heatmap=False), ToTensor()])
     else:
         transforms = Augmentation(iaa_augs)
     return transforms

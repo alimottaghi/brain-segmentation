@@ -1,7 +1,13 @@
 {
-    "dataset": "brain-segmentation",
+    "dataset": "cityscapes",
+    "backbone": "resnet",
+    "loss": "crossentropy",
+    "model": "deeplab",
+    "semantic": "enable",
+    "metric": "iou",
     "num_validation_patients": 10,
     "num_labeled_patients": 50,
+    "labeled_ratio": 0.01,
     "week_augmentations": {
         "num_augmentations": 5,
         "scale": [0.9, 1.1],
@@ -19,7 +25,7 @@
         "flip": 0.5
     },
     "learning_rate": 1e-4,
-    "batch_size": 16,
+    "batch_size": 2,
     "batch_ratio": 1,
     "num_epochs": 10,
     "save_summary_steps": 100,

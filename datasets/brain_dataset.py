@@ -11,6 +11,7 @@ class BrainSegmentationDataset(Dataset):
     def __init__(self, root_dir, subset="train", transform=None, params=None):
         self.subset = subset
         self.transform = transform
+        self.params = params
         self.image_files, self.mask_files = list_images(root_dir, subset, params)
 
     def __len__(self):
@@ -21,7 +22,10 @@ class BrainSegmentationDataset(Dataset):
         mask_path = self.mask_files[idx]
         image = imread(image_path)
         mask = imread(mask_path)
-        sample = (image, mask)
+        if self.params.dataset == 'brats':
+            sample = (image, np.expand_dims(mask, axis=2))
+        else:  
+            sample = (image, mask)
         if self.transform is not None:
             sample = self.transform(sample)
         return sample

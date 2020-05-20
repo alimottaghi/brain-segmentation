@@ -21,12 +21,17 @@ def evaluate(model, loss_fn, dataloader, metrics, params):
     summ = []
 
     for image_batch, mask_batch in dataloader:
-
+        
+        image_batch = image_batch.float()
+        mask_batch = mask_batch.long()
         image_batch, mask_batch = image_batch.to(
                 params.device, non_blocking=True), mask_batch.to(params.device, non_blocking=True)
         
         with torch.set_grad_enabled(False):
-            pred_batch = model(image_batch)
+            if params.backbone == 'resnet':
+                pred_batch = model(image_batch)['out']
+            else: 
+                pred_batch = model(image_batch)
             loss = loss_fn(pred_batch, mask_batch)
 
             pred_batch_np = pred_batch.detach().cpu().numpy()
@@ -65,14 +70,21 @@ def generate_outputs(model, dataloader, params, save=True):
     mask_list = []
     pred_list = []
     for i, (image_batch, mask_batch) in enumerate(dataloader):
+        image_batch = image_batch.float()
+        mask_batch = mask_batch.long()
         image_batch_device, mask_batch_device = image_batch.to(params.device), mask_batch.to(params.device)
         batch_size = len(image_batch)
         with torch.set_grad_enabled(False):
             pred_batch_device = model(image_batch_device)
             pred_batch = pred_batch_device.detach().cpu()
-            pred_list.extend([np.round(pred_batch[s].numpy().transpose(1, 2, 0)).astype(int) for s in range(batch_size)])
-            image_list.extend([image_batch[s].numpy().transpose(1, 2, 0) for s in range(batch_size)])
-            mask_list.extend([mask_batch[s].numpy().transpose(1, 2, 0) for s in range(batch_size)])
+            if params.model == 'deeplab':
+                pred_list.extend([np.round(pred_batch[s].numpy()).astype(int) for s in range(batch_size)])
+                image_list.extend([image_batch[s].numpy() for s in range(batch_size)])
+                mask_list.extend([mask_batch[s].numpy() for s in range(batch_size)])
+            elif params.model == 'unet':
+                pred_list.extend([np.round(pred_batch[s].numpy().transpose(1, 2, 0)).astype(int) for s in range(batch_size)])
+                image_list.extend([image_batch[s].numpy().transpose(1, 2, 0) for s in range(batch_size)])
+                mask_list.extend([mask_batch[s].numpy().transpose(1, 2, 0) for s in range(batch_size)])
 
     output_path = os.path.join(params.model_dir, "outputs")
     if not os.path.exists(output_path):

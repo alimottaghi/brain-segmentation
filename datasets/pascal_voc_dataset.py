@@ -9,11 +9,13 @@ import scipy.io as io
 import matplotlib.pyplot as plt
 import glob
 from matplotlib.image import imread
+import random
 
 from PIL import Image
 from tqdm import tqdm
 from torch.utils import data
 from torchvision import transforms
+from utils.visualizer import resize_sample
 
 
 class PascalSegmentationDataset(data.Dataset):
@@ -44,11 +46,13 @@ class PascalSegmentationDataset(data.Dataset):
         root,
         sbd_path=None,
         split="train_aug",
+        subset = "labeled",
         is_transform=False,
         img_size=512,
         augmentations=None,
         img_norm=True,
         test_mode=False,
+        params=None,
     ):
         self.root = root
         self.sbd_path = sbd_path
@@ -61,6 +65,8 @@ class PascalSegmentationDataset(data.Dataset):
         self.mean = np.array([104.00699, 116.66877, 122.67892])
         self.files = collections.defaultdict(list)
         self.img_size = img_size if isinstance(img_size, tuple) else (img_size, img_size)
+        self.params = params
+        self.subset = subset
 
         if not self.test_mode:
             for split in ["train", "val", "trainval"]:
@@ -76,7 +82,6 @@ class PascalSegmentationDataset(data.Dataset):
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
             ]
         )
-
     def __len__(self):
         return len(self.files[self.split])
 
@@ -86,11 +91,19 @@ class PascalSegmentationDataset(data.Dataset):
         lbl_path = pjoin(self.root, "SegmentationClass/pre_encoded", im_name + ".png")
         im = imread(im_path)
         lbl = imread(lbl_path)
+        im, lbl = resize_sample((im,lbl),size=256)
+        #lbl = self.decode_segmap(lbl)
+        im = im.astype('float')
+        lbl = 255*lbl
+        #im = im.transpose(2, 0, 1)
+        #lbl = lbl.transpose(2,0,1)
         if self.augmentations is not None:
-            im, lbl = self.augmentations(im, lbl)
+            im, lbl = self.augmentations((im, lbl))
+            im = im.reshape(3,256,256)
+            #lbl = lbl.reshape(3,512,512)
         if self.is_transform:
             im, lbl = self.transform(im, lbl)
-        return im, lbl
+        return im, lbl 
 
     def transform(self, img, lbl):
         if self.img_size == ("same", "same"):
@@ -199,10 +212,28 @@ class PascalSegmentationDataset(data.Dataset):
         self.files["train_aug"] = train_aug
         set_diff = set(self.files["val"]) - set(train_aug)  # remove overlap
         self.files["train_aug_val"] = list(set_diff)
-
+        
+        all_patients = self.files["train_aug"]
+        random.seed(self.params.seed)
+        #validation_patients = random.sample(all_patients, k=self.params.num_validation_patients)
+        train_patients = sorted(list(set(all_patients)))
+        labeled_patients = random.sample(train_patients, k=self.params.num_labeled_patients)
+        unlabeled_patients = sorted(list(set(train_patients).difference(labeled_patients)))
+        
+        if self.subset == "train":
+            patients = train_patients
+        elif self.subset == "validation":
+            patients = validation_patients
+        elif self.subset == "unlabeled":
+            patients = unlabeled_patients
+        elif self.subset == "labeled":
+            patients = labeled_patients
+  
+        
+        self.files["train_aug"] = patients
         pre_encoded = glob.glob(pjoin(target_path, "*.png"))
         expected = np.unique(self.files["train_aug"] + self.files["val"]).size
-
+        """
         if len(pre_encoded) != expected:
             print("Pre-encoding segmentation masks...")
             for ii in tqdm(sbd_train_list):
@@ -220,6 +251,7 @@ class PascalSegmentationDataset(data.Dataset):
                 m.imsave(pjoin(target_path, fname), lbl)
 
         assert expected == 9733, "unexpected dataset sizes"
+        """
 
 
 # Leave code for debugging purposes
